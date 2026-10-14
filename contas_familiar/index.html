@@ -54,23 +54,17 @@ async function persist(next){if(busy)return;busy=true;setStatus('Guardando…');
 async function mutate(fn){if(busy)return false;try{await load();let next=structuredClone(data);fn(next);return await persist(next)}catch(e){setStatus(e.message,true);return false}}
 function render(){let month=$('month').value,items=data.items.filter(x=>x.date.startsWith(month)).sort((a,b)=>b.date.localeCompare(a.date)),ex=items.filter(x=>x.type==='gasto').reduce((s,x)=>s+x.amount,0),inc=items.filter(x=>x.type==='ingreso').reduce((s,x)=>s+x.amount,0);$('expenses').textContent=money(ex);$('income').textContent=money(inc);$('net').textContent=money(inc-ex);$('count').textContent=items.length;let totals={};items.filter(x=>x.type==='gasto').forEach(x=>{let [g]=classify(x);totals[g]=(totals[g]||0)+x.amount});$('categories').innerHTML=Object.entries(totals).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div class="item"><span>${escapeHTML(c)}</span><strong>${money(n)}</strong></div>`).join('')||'<p class="muted">Sin gastos registrados este mes.</p>';$('movements').innerHTML=items.map(x=>`<div class="item"><div><strong>${escapeHTML(classify(x).join(' · '))}</strong><small>${escapeHTML(x.date)} · ${escapeHTML(x.account)}${x.to?' → '+escapeHTML(x.to):''}${x.note?' · '+escapeHTML(x.note):''}</small></div><div style="text-align:right"><strong class="${x.type==='gasto'?'red':x.type==='ingreso'?'green':''}">${x.type==='gasto'?'-':x.type==='ingreso'?'+':''}${money(x.amount)}</strong><br><button style="padding:5px;margin-top:4px" data-delete="${escapeHTML(x.id)}">Eliminar</button></div></div>`).join('')||'<p class="muted">Aún no hay movimientos.</p>';$('balances').innerHTML=accounts.map(a=>{let b=data.bases[a],delta=data.items.reduce((s,x)=>s+(x.type==='ingreso'&&x.account===a?x.amount:0)-(x.type==='gasto'&&x.account===a?x.amount:0)+(x.type==='transferencia'&&x.to===a?x.amount:0)-(x.type==='transferencia'&&x.account===a?x.amount:0),0);return `<div class="item"><span>${escapeHTML(a)}</span><strong>${b===undefined?'Sin saldo inicial':money(b+delta)}</strong></div>`}).join('')}
 $('movements').addEventListener('click',async e=>{let b=e.target.closest('[data-delete]');if(b&&confirm('¿Eliminar este movimiento?'))await mutate(d=>{d.items=d.items.filter(x=>String(x.id)!==b.dataset.delete)})});
-// Importe en centavos: 1 -> 0,01; 1234 -> 12,34. Acepta coma o punto al pegar.
-function parseMoney(value){
-  const t=String(value??'').trim().replace(/\\s/g,'');
-  if(!t)return NaN;
-  const normalized=t.replace(/\\./g,'').replace(',', '.');
-  return Number(normalized);
-}
+// Entrada monetaria en centavos para teclados de iPhone.
 const amountField=$('amount');
 amountField.addEventListener('input',()=>{
-  const digits=amountField.value.replace(/\\D/g,'').slice(0,12);
+  const digits=amountField.value.replace(/\D/g,'').slice(0,12);
   if(!digits){amountField.value='';return;}
   amountField.value=(Number(digits)/100).toFixed(2).replace('.',',');
 });
 amountField.addEventListener('paste',e=>{
   const pasted=e.clipboardData?.getData('text')?.trim()||'';
-  const normalized=pasted.replace(/\\s/g,'').replace(/\\./g,'').replace(',', '.');
-  if(/^\\d+(?:\\.\\d{1,2})?$/.test(normalized)){
+  const normalized=pasted.replace(/\s/g,'').replace(/\./g,'').replace(',', '.');
+  if(/^\d+(?:\.\d{1,2})?$/.test(normalized)){
     e.preventDefault();
     amountField.value=Number(normalized).toFixed(2).replace('.',',');
   }
